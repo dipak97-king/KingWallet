@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>King Wallet - Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { getFirestore, doc, onSnapshot, updateDoc, increment, setDoc, getDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyA6mIZMGZ3mAgJ4yppLcquQuZLA-b3zDGk",
+        authDomain: "kingwallet-d300d.firebaseapp.com",
+        projectId: "kingwallet-d300d",
+        storageBucket: "kingwallet-d300d.firebasestorage.app",
+        messagingSenderId: "79592887664",
+        appId: "1:79592887664:web:fadf1e6ed0b56c70baabb5"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const myId = "user_dipak_001"; // Aapki ID
+
+      // Initialize & Live Sync
+      async function init() {
+          const userRef = doc(db, "users", myId);
+          onSnapshot(userRef, (snap) => {
+              if (snap.exists()) document.getElementById('balance').innerText = "₹" + snap.data().balance;
+          });
+      }
+
+      // --- 1. ADD MONEY (UPI Request) ---
+      window.requestAdd = async () => {
+          const amt = document.getElementById('add-amt').value;
+          if(amt < 10) return alert("Min ₹10 required");
+          
+          await addDoc(collection(db, "requests"), {
+              type: "DEPOSIT",
+              userId: myId,
+              amount: parseInt(amt),
+              status: "PENDING",
+              time: new Date().toLocaleString()
+          });
+          alert("Request Sent! Pay to UPI: king@upi and wait for approval.");
+          showPage('home-page');
+      };
+
+      // --- 2. WITHDRAW ---
+      window.requestWithdraw = async () => {
+          const amt = document.getElementById('wit-amt').value;
+          const upi = document.getElementById('wit-upi').value;
+          if(amt < 100 || !upi) return alert("Enter valid Amount (Min 100) & UPI ID");
+
+          await addDoc(collection(db, "requests"), {
+              type: "WITHDRAW",
+              userId: myId,
+              amount: parseInt(amt),
+              upi: upi,
+              status: "PENDING",
+              time: new Date().toLocaleString()
+          });
+          alert("Withdrawal request submitted!");
+          showPage('home-page');
+      };
+
+      // --- 3. SEND TO USER ---
+      window.sendMoney = async () => {
+          const targetId = document.getElementById('send-id').value;
+          const amt = parseInt(document.getElementById('send-amt').value);
+          const myRef = doc(db, "users", myId);
+          const targetRef = doc(db, "users", targetId);
+
+          const mySnap = await getDoc(myRef);
+          if(mySnap.data().balance < amt) return alert("Insufficient Balance!");
+
+          const targetSnap = await getDoc(targetRef);
+          if(!targetSnap.exists()) return alert("User Not Found!");
+
+          await updateDoc(myRef, { balance: increment(-amt) });
+          await updateDoc(targetRef, { balance: increment(amt) });
+          
+          alert("Money Sent Successfully to " + targetId);
+          showPage('home-page');
+      };
+
+      init();
+    </script>
+
+    <style>
+        .page { display: none; }
+        .active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tap:active { transform: scale(0.96); transition: 0.1s; }
+    </style>
+</head>
+<body class="max-w-md mx-auto bg-slate-50 min-h-screen pb-20">
+
+    <section id="home-page" class="page active">
+        <div class="p-6 bg-blue-600 text-white rounded-b-[3rem] shadow-xl">
+            <p class="text-xs opacity-70">Total Balance</p>
+            <h1 id="balance" class="text-4xl font-black mt-1">₹0</h1>
+            <div class="flex gap-3 mt-8">
+                <button onclick="showPage('add-page')" class="flex-1 bg-white text-blue-600 py-3 rounded-2xl font-bold tap">Add</button>
+                <button onclick="showPage('send-page')" class="flex-1 bg-blue-500 border border-blue-400 py-3 rounded-2xl font-bold tap">Send</button>
+                <button onclick="showPage('withdraw-page')" class="flex-1 bg-blue-700 py-3 rounded-2xl font-bold tap text-xs">Withdraw</button>
+            </div>
+        </div>
+        <div class="p-6 grid grid-cols-2 gap-4">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100"><i class="fa-solid fa-bolt text-yellow-500 mb-2"></i><p class="font-bold text-sm">Bills</p></div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100"><i class="fa-solid fa-gamepad text-purple-500 mb-2"></i><p class="font-bold text-sm">Games</p></div>
+        </div>
+    </section>
+
+    <section id="add-page" class="page p-6">
+        <h2 class="text-2xl font-black mb-6"><i onclick="showPage('home-page')" class="fa-solid fa-arrow-left mr-4"></i>Deposit</h2>
+        <div class="bg-white p-6 rounded-3xl shadow-inner mb-6">
+            <p class="text-xs font-bold text-slate-400 mb-2">AMOUNT</p>
+            <input id="add-amt" type="number" placeholder="₹500" class="text-3xl font-bold outline-none w-full">
+        </div>
+        <p class="text-center text-slate-400 text-sm mb-6">Pay to: <span class="text-blue-600 font-bold text-lg">king@upi</span></p>
+        <button onclick="requestAdd()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold tap shadow-lg">Submit Request</button>
+    </section>
+
+    <section id="send-page" class="page p-6">
+        <h2 class="text-2xl font-black mb-6"><i onclick="showPage('home-page')" class="fa-solid fa-arrow-left mr-4"></i>Send Money</h2>
+        <input id="send-id" type="text" placeholder="Receiver User ID (e.g. user_002)" class="w-full p-4 bg-white rounded-2xl mb-4 border outline-none">
+        <input id="send-amt" type="number" placeholder="Amount" class="w-full p-4 bg-white rounded-2xl mb-6 border outline-none">
+        <button onclick="sendMoney()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold tap">Transfer Now</button>
+    </section>
+
+    <section id="withdraw-page" class="page p-6">
+        <h2 class="text-2xl font-black mb-6"><i onclick="showPage('home-page')" class="fa-solid fa-arrow-left mr-4"></i>Withdraw</h2>
+        <input id="wit-upi" type="text" placeholder="Your UPI ID" class="w-full p-4 bg-white rounded-2xl mb-4 border outline-none">
+        <input id="wit-amt" type="number" placeholder="Amount (Min 100)" class="w-full p-4 bg-white rounded-2xl mb-6 border outline-none">
+        <button onclick="requestWithdraw()" class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold tap">Request Payout</button>
+    </section>
+
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t flex justify-around py-4">
+        <i onclick="showPage('home-page')" class="fa-solid fa-house text-blue-600 text-xl tap"></i>
+        <i onclick="showPage('add-page')" class="fa-solid fa-plus-circle text-slate-300 text-xl tap"></i>
+        <i onclick="showPage('withdraw-page')" class="fa-solid fa-wallet text-slate-300 text-xl tap"></i>
+    </nav>
+
+    <script>
+        function showPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+    </script>
+</body>
+</html>
